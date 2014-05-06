@@ -4,6 +4,8 @@
 
 package org.sviperll.sqlclient;
 
+import com.github.sviperll.Credentials;
+import com.github.sviperll.Property;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -12,9 +14,10 @@ import java.io.OutputStreamWriter;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import org.sviperll.cli.CLISpecification;
-import org.sviperll.cli.BooleanProperty;
-import org.sviperll.cli.CLIException;
+import com.github.sviperll.cli.CLISpecification;
+import com.github.sviperll.cli.CLIException;
+import com.github.sviperll.cli.CLIHandlers;
+import java.io.File;
 
 /**
  *
@@ -28,23 +31,27 @@ public class Main {
         Main main = new Main();
 
         CLISpecification cliSpec = new CLISpecification();
-        cliSpec.add('s', "silent", "Do not output information intended for human", main.silent);
-        cliSpec.add('p', "no-prompt", "Do not output command line prompt", main.noprompt);
+        cliSpec.add('s', "silent", "Do not output information intended for human", CLIHandlers.booleanHandler(main.silent));
+        cliSpec.add("no-prompt", "Do not output command line prompt", CLIHandlers.booleanHandler(main.noprompt));
+        cliSpec.add('t', "timeout", "Do not output command line prompt", CLIHandlers.integer(main.timeout));
+        cliSpec.add('p', "password-file", "Do not output command line prompt", new CredentialsHandler(main.credentials));
         try {
             args = cliSpec.run(args);
-            if (args.length < 4) {
-                System.out.println("usage: command [OPTIONS] <driver-class-name> <jdbc-url> <user-name> <password>");
+            if (args.length != 2) {
+                System.out.println("usage: command [OPTIONS] <driver-class-name> <jdbc-url>");
                 cliSpec.usage(System.out);
             } else
                 main.run(args);
         } catch (CLIException ex) {
-            System.out.println("usage: command [OPTIONS] <driver-class-name> <jdbc-url> <user-name> <password>");
+            System.out.println("usage: command [OPTIONS] <driver-class-name> <jdbc-url>");
             cliSpec.usage(System.out);
         }
     }
 
-    private final BooleanProperty silent = new BooleanProperty();
-    private final BooleanProperty noprompt = new BooleanProperty();
+    private final Property<Boolean> silent = new Property<Boolean>(false);
+    private final Property<Boolean> noprompt = new Property<Boolean>(false);
+    private final Property<Integer> timeout = new Property<Integer>(10);
+    private final Property<Credentials> credentials = new Property<Credentials>(null);
 
     private void recoverFromException(Exception ex) {
         System.err.println("Found error");
@@ -58,12 +65,12 @@ public class Main {
 
     private void run(String[] args) throws ClassNotFoundException, InstantiationException, IllegalAccessException, IOException {
         String driver = args[0];
-        ConnectionOptions options = new ConnectionOptions(args[1], args[2], args[3]);
+        String connectionString = args[1];
 
         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(System.out));
         try {
             ConsoleWriter writer = new ConsoleWriter(bw, silent.get());
-            BootProcess boot = new BootProcess(writer, options);
+            BootProcess boot = new BootProcess(writer, connectionString);
             boot.run(driver);
         } finally {
             try {
@@ -76,11 +83,11 @@ public class Main {
 
     private class BootProcess {
         private final ConsoleWriter writer;
-        private final ConnectionOptions connectionOptions;
+        private final String connectionString;
 
-        private BootProcess(ConsoleWriter writer, ConnectionOptions connectionOptions) {
+        private BootProcess(ConsoleWriter writer, String connectionString) {
             this.writer = writer;
-            this.connectionOptions = connectionOptions;
+            this.connectionString = connectionString;
         }
 
         private void run(String driver) throws ClassNotFoundException, InstantiationException, IllegalAccessException, IOException {
@@ -125,10 +132,16 @@ public class Main {
 
         private void bootUpAndRunRepl(ConsoleReader reader) throws IOException, SQLException {
             writer.writeForHuman("Connecting: ");
-            writer.writeForHuman(connectionOptions.getConnectionString());
+            writer.writeForHuman(connectionString);
             writer.writeForHuman("...");
             writer.flushForHuman();
-            Connection connection = DriverManager.getConnection(connectionOptions.getConnectionString(), connectionOptions.getUserName(), connectionOptions.getPassword());
+            DriverManager.setLoginTimeout(timeout.get());
+            Connection connection;
+            if (credentials.get() == null)
+                connection = DriverManager.getConnection(connectionString);
+            else
+                connection = DriverManager.getConnection(connectionString, credentials.get().userName(), credentials.get().password());
+
             try {
                 writer.writeForHuman("done.");
                 writer.newLineForHuman();
