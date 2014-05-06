@@ -135,6 +135,6 @@
     </dependencies>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.build.mainClass>org.sviperll.sqlclient.Main</project.build.mainClass>
+        <project.build.mainClass>com.github.sviperll.sqlclient.Main</project.build.mainClass>
     </properties>
 </project>

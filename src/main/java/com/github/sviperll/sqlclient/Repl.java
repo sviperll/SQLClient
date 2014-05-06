@@ -2,7 +2,7 @@
  * Copyright (C) 2012 Victor Nazarov <asviraspossible@gmail.com>
  */
 
-package org.sviperll.sqlclient;
+package com.github.sviperll.sqlclient;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -156,12 +156,13 @@ class Repl {
             StringBuilder sb = new StringBuilder();
             sb.append(quoteString);
             int fromIndex = 0;
-            while (fromIndex < s.length()) {
-                int index = s.indexOf(quoteString, fromIndex);
+            int index;
+            while ((index = s.indexOf(quoteString, fromIndex)) >= 0) {
                 sb.append(s.substring(fromIndex, index));
                 sb.append(escapedQuoteString);
                 fromIndex = index + quoteString.length();
             }
+            sb.append(s.substring(fromIndex));
             sb.append(quoteString);
             return sb.toString();
         }

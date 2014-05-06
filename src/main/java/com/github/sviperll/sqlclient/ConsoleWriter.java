@@ -2,7 +2,7 @@
  * Copyright (C) 2012 Victor Nazarov <asviraspossible@gmail.com>
  */
 
-package org.sviperll.sqlclient;
+package com.github.sviperll.sqlclient;
 
 import java.io.BufferedWriter;
 import java.io.IOException;

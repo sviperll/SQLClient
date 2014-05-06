@@ -2,7 +2,7 @@
  * Copyright (C) 2012 Victor Nazarov <asviraspossible@gmail.com>
  */
 
-package org.sviperll.sqlclient;
+package com.github.sviperll.sqlclient;
 
 import com.github.sviperll.Credentials;
 import com.github.sviperll.Property;
@@ -18,6 +18,8 @@ import com.github.sviperll.cli.CLISpecification;
 import com.github.sviperll.cli.CLIException;
 import com.github.sviperll.cli.CLIHandlers;
 import java.io.File;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -32,9 +34,10 @@ public class Main {
 
         CLISpecification cliSpec = new CLISpecification();
         cliSpec.add('s', "silent", "Do not output information intended for human", CLIHandlers.booleanHandler(main.silent));
+        cliSpec.add('r', "retry", "Retry after errors", CLIHandlers.booleanHandler(main.retry));
         cliSpec.add("no-prompt", "Do not output command line prompt", CLIHandlers.booleanHandler(main.noprompt));
-        cliSpec.add('t', "timeout", "Do not output command line prompt", CLIHandlers.integer(main.timeout));
-        cliSpec.add('p', "password-file", "Do not output command line prompt", new CredentialsHandler(main.credentials));
+        cliSpec.add('t', "timeout", "Set connection timeout to N secods (" + main.timeout.get() + " default)", CLIHandlers.integer(main.timeout));
+        cliSpec.add('p', "password-file", "Specify file with login and password", new CredentialsHandler(main.credentials));
         try {
             args = cliSpec.run(args);
             if (args.length != 2) {
@@ -49,6 +52,7 @@ public class Main {
     }
 
     private final Property<Boolean> silent = new Property<Boolean>(false);
+    private final Property<Boolean> retry = new Property<Boolean>(false);
     private final Property<Boolean> noprompt = new Property<Boolean>(false);
     private final Property<Integer> timeout = new Property<Integer>(10);
     private final Property<Credentials> credentials = new Property<Credentials>(null);
@@ -63,7 +67,7 @@ public class Main {
         ex.printStackTrace(System.err);
     }
 
-    private void run(String[] args) throws ClassNotFoundException, InstantiationException, IllegalAccessException, IOException {
+    private void run(String[] args) throws ClassNotFoundException, InstantiationException, IllegalAccessException, IOException, SQLException {
         String driver = args[0];
         String connectionString = args[1];
 
@@ -90,7 +94,7 @@ public class Main {
             this.connectionString = connectionString;
         }
 
-        private void run(String driver) throws ClassNotFoundException, InstantiationException, IllegalAccessException, IOException {
+        private void run(String driver) throws ClassNotFoundException, InstantiationException, IllegalAccessException, IOException, SQLException {
             writer.writeForHuman("Loading: ");
             writer.writeForHuman(driver);
             writer.writeForHuman("...");
@@ -103,11 +107,11 @@ public class Main {
             bootUpAndRunRepl();
         }
 
-        private void bootUpAndRunRepl() {
+        private void bootUpAndRunRepl() throws IOException, SQLException {
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
             try {
                 ConsoleReader reader = new ConsoleReader(br, writer, !noprompt.get());
-                bootUpAndRunReplInErrorRecoveryLoop(reader);
+                retryBootUpAndRunRepl(reader);
             } finally {
                 try {
                     br.close();
@@ -117,15 +121,23 @@ public class Main {
             }
         }
 
-        private void bootUpAndRunReplInErrorRecoveryLoop(ConsoleReader reader) {
-            for (;;) {
-                try {
-                    bootUpAndRunRepl(reader);
-                    break;
-                } catch (IOException ex) {
-                    recoverFromException(ex);
-                } catch (SQLException ex) {
-                    recoverFromException(ex);
+        private void retryBootUpAndRunRepl(ConsoleReader reader) throws IOException, SQLException {
+            if (!retry.get()) {
+                bootUpAndRunRepl(reader);
+            } else {
+                for (;;) {
+                    try {
+                        bootUpAndRunRepl(reader);
+                        break;
+                    } catch (IOException ex) {
+                        recoverFromException(ex);
+                    } catch (SQLException ex) {
+                        recoverFromException(ex);
+                    }
+                    try {
+                        Thread.sleep(10000);
+                    } catch (InterruptedException ex) {
+                    }
                 }
             }
         }
@@ -148,12 +160,27 @@ public class Main {
                 writer.flushForHuman();
 
                 Repl repl = new Repl(connection, reader, writer);
-                repl.run();
+                retryRunRepl(repl);
             } finally {
                 try {
                     connection.close();
                 } catch (SQLException ex) {
                     inhibitException(ex);
+                }
+            }
+        }
+
+        private void retryRunRepl(Repl repl) throws IOException, SQLException {
+            if (!retry.get()) {
+                repl.run();
+            } else {
+                for (;;) {
+                    try {
+                        repl.run();
+                        break;
+                    } catch (SQLException ex) {
+                        recoverFromException(ex);
+                    }
                 }
             }
         }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Victor Nazarov <asviraspossible@gmail.com>.
  */
-package org.sviperll.sqlclient;
+package com.github.sviperll.sqlclient;
 
 import com.github.sviperll.Credentials;
 import com.github.sviperll.Property;
